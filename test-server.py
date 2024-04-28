@@ -1,21 +1,12 @@
+import json
+import config
+import clickup
 import requests
 import threading
-import json
+
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
-dify_base_url = "https://api.dify.ai/v1"
-dify_token = "app-C9bB48tWNbjf4Oc6NWpCW5gR"
-
-clickup_token = "pk_66766950_8YONP68FKTBWORUOF7TIBO3U2CO2EFOJ"
-zoo_test_slack_id = "U028NRCSKJM"
-
-
-def create_clickup_ticket():
-
-    return
-
 
 def process_response(data):
     answer = json.loads(data["answer"])
@@ -25,12 +16,12 @@ def process_response(data):
         return
 
     if action == "create_ticket":
-        create_clickup_ticket()
+        clickup.create_clickup_ticket()
 
 
 def handle_slack_event(data):
     text = data["event"]["text"]
-    tag_pattern = f"<@{zoo_test_slack_id}>"
+    tag_pattern = f"<@{config.bot_slack_id}>"
     cleaned_msg = text.replace(tag_pattern, "").strip()
 
     data = {
@@ -43,9 +34,9 @@ def handle_slack_event(data):
 
     try:
         response = requests.post(
-            f"{dify_base_url}/chat-messages",
+            f"{config.dify_base_url}/chat-messages",
             headers={
-                "Authorization": f"Bearer {dify_token}",
+                "Authorization": f"Bearer {config.dify_token}",
                 "Content-Type": "application/json",
             },
             json=data,
