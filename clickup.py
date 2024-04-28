@@ -1,35 +1,60 @@
+import sys
+import time
 import json
 import config
 import requests
 
 
-def create_clickup_ticket():
-
+def create_clickup_ticket(title:str,desc:str):
     try:
-        url = f"https://api.clickup.com/api/v2/space/{config.product_infra_folder}/folder"
-        headers = {"Authorization": config.clickup_api}
-        r = requests.get(url=url, headers=headers)
-        response_dict = json.loads(r.text)
-        folders = response_dict["folders"]
+
+        headers = {
+            "Authorization": f"{config.clickup_token}",
+            "Content-Type": "application/json",
+        }
+
+        get_folder_url = f'https://api.clickup.com/api/v2/folder/{config.product_infra_sprint_folder_id}'
+        response = requests.get(get_folder_url, headers=headers)
+
+        if response.ok:
+            data= response.json()
+            lists = data["lists"]
+            current_time_millis = int(round(time.time() * 1000))
         
-        clickup_space_folders = []
-        for folder in folders:
-            tmp_dict = {}
-            folder_id = folder['id']
-            folder_name = folder['name']
-            tmp_dict["folder_id"] = folder_id
-            tmp_dict["folder_name"] = folder_name
-            clickup_space_folders.append(tmp_dict)
+            target_list = None
+
+            for list in lists:
+                if target_list:
+                    break
+                if current_time_millis < int(list["start_date"]) or current_time_millis > int(list["due_date"]):
+                    continue
+                target_list = list
+
+
+            if not target_list:
+                print("Error: list not found")
+                return
+
         
-        return clickup_space_folders
-    
+        create_task_url = "https://api.clickup.com/api/v2/list/" + target_list["id"] + "/task"
+
+        payload = {
+            "name": title,
+            "description": desc,
+            "custom_fields":[
+                {
+                    "id":"d987dc02-abc2-4e3a-a350-442f7ca04e27",
+                    "value":9
+                }
+            ]
+        }
+
+        response = requests.post(create_task_url, json=payload, headers=headers)
+        data = response.json()
+        return data
+
     except:
-        print("\n* Function (get_task_member) Failed * ", sys.exc_info())
-
-    
-
-    return
-
+        print("\n* Function (create_task) Failed * ", sys.exc_info())
 
 
 # create ticket 
