@@ -11,20 +11,28 @@ app = Flask(__name__)
 bot_client = WebClient(token=config.bot_token)
 
 
-def process_dify(msg):
-    answer = json.loads(msg["answer"])
+def process_dify(answer,channel):
+    if "action" not in answer:
+        bot_client.chat_postMessage(
+                channel=channel,
+                text=answer["msg"]
+            )
+        return
+    
     action = answer["action"]
 
-    if not action:
-        return
-
     if action == "create_ticket":
+        bot_client.chat_postMessage(
+                channel=channel,
+                text="OK,please wait...."
+            )
         return clickup.create_clickup_ticket(title=answer["title"],desc=answer["description"])
 
 
 
 def handle_slack_event(data):
     text = data["event"]["text"]
+    channel = data["event"]["channel"]
     tag_pattern = f"<@{config.bot_slack_id}>"
     cleaned_msg = text.replace(tag_pattern, "").strip()
 
@@ -46,16 +54,22 @@ def handle_slack_event(data):
 
         if response.ok:
             dify_msg = response.json()
-            result = process_dify(dify_msg)
-
+            answer = json.loads(dify_msg["answer"])
+            result = process_dify(answer,channel)
+            if not result:
+                return
+            url=result['url']
+            
             bot_client.chat_postMessage(
-                channel=data["event"]["channel"],
-                text=f"{dify_msg['answer']['msg']}:{result['url']}"
+                channel=channel,
+                text=f"{answer['msg']}: {url}"
             )
-        
-    except:
-        print("Error:", response)
 
+    except requests.exceptions.RequestException as e:
+            print(f"Error: {e}")
+            raise e
+    
+    
 
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
@@ -66,8 +80,14 @@ def slack_events():
         return jsonify({"challenge": data["challenge"]})
 
     if "event" in data:
-        thread = threading.Thread(target=handle_slack_event, args=(data,))
-        thread.start()
+        if data['event']['user'] != config.my_slack_id:
+            bot_client.chat_postMessage(
+                channel=data["event"]["channel"],
+                text="Sorry, temporarily I only serve to Hans"
+            )
+        else:
+            thread = threading.Thread(target=handle_slack_event, args=(data,))
+            thread.start()
 
     return jsonify({})
 
