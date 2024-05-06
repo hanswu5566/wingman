@@ -4,6 +4,7 @@ import config
 import clickup
 import requests
 import threading
+from log import logger
 from slack import WebClient
 from flask import Flask, request, jsonify
 
@@ -21,7 +22,7 @@ def process_dify(answer, channel):
 
     if action == "create_ticket":
         return clickup.create_clickup_ticket(
-            title=answer["title"], desc=answer["description"], role=answer["role"]
+            title=answer["title"], desc=answer["description"], roles=answer["roles"]
         )
 
 
@@ -66,7 +67,7 @@ def handle_slack_event(data):
             )
 
     except requests.exceptions.RequestException as e:
-        print(f"Error: {e}")
+        logger.error(f"Error: {e}")
         raise e
 
 

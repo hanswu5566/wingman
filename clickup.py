@@ -3,9 +3,9 @@ import time
 import config
 import secret
 import requests
+from log import logger
 
-
-def create_clickup_ticket(title: str, desc: str, role: str):
+def create_clickup_ticket(title: str, desc: str, roles: list[str]):
     try:
         headers = {
             "Authorization": f"{secret.clickup_token}",
@@ -32,7 +32,7 @@ def create_clickup_ticket(title: str, desc: str, role: str):
                 target_list = list
 
             if not target_list:
-                print("Error: list not found")
+                logger.error("Error: list not found")
                 return
 
         create_task_url = (
@@ -42,7 +42,7 @@ def create_clickup_ticket(title: str, desc: str, role: str):
         payload = {
             "name": title,
             "description": desc,
-            "assignees": [config.role_to_clickup_id[role]],
+            "assignees": [config.role_to_clickup_id[role] for role in roles if role in config.role_to_clickup_id],
             "custom_fields": [
                 {"id": "d987dc02-abc2-4e3a-a350-442f7ca04e27", "value": 9},
             ],
@@ -53,4 +53,4 @@ def create_clickup_ticket(title: str, desc: str, role: str):
         return data
 
     except:
-        print("\n* Function (create_task) Failed * ", sys.exc_info())
+        logger.error("\n* Function (create_task) Failed * ", sys.exc_info())
