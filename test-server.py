@@ -22,18 +22,7 @@ def process_dify(answer, channel):
 
     # Trigger clickup ticket creation
     if action == "create_ticket":
-
-        title = answer["title"]
-        desc = answer["description"]
-        roles = answer["roles"]
-
-        priority = answer["priority"]
-        duration = answer["duration"]
-
-        res = clickup.create_clickup_ticket(
-            title=title, desc=desc, roles=roles, priority=priority, duration=duration
-        )
-
+        res = clickup.create_clickup_ticket(answer)
         if res:
             url = res["url"]
             (

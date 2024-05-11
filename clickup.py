@@ -43,9 +43,14 @@ def get_target_list():
         shared_logger.error("\n* Function (Get list) Failed * ", sys.exc_info())
 
 
-def create_clickup_ticket(
-    title: str, desc: str, roles: list[str], priority: str, duration: int
-):
+def create_clickup_ticket(answer):
+
+    title = answer["title"]
+    desc = answer["description"]
+    roles = answer["roles"]
+    priority = answer["priority"]
+    duration = answer["duration"]
+
     try:
         target_list = get_target_list()
         create_task_url = (
