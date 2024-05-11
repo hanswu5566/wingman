@@ -4,26 +4,43 @@ import config
 import clickup
 import requests
 import threading
-from log import logger
+from logger import shared_logger
 from slack import WebClient
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
 bot_client = WebClient(token=secret.bot_token)
 
 
 def process_dify(answer, channel):
+    # Respond typical error message
     if "action" not in answer:
         bot_client.chat_postMessage(channel=channel, text=answer["msg"])
         return
 
     action = answer["action"]
 
+    # Trigger clickup ticket creation
     if action == "create_ticket":
-        return clickup.create_clickup_ticket(
-            title=answer["title"], desc=answer["description"], roles=answer["roles"]
+
+        title = answer["title"]
+        desc = answer["description"]
+        roles = answer["roles"]
+
+        priority = answer["priority"]
+        duration = answer["duration"]
+
+        res = clickup.create_clickup_ticket(
+            title=title, desc=desc, roles=roles, priority=priority, duration=duration
         )
+
+        if res:
+            url = res["url"]
+            (
+                bot_client.chat_postMessage(
+                    channel=channel, text=f"{answer['msg']}: {url}"
+                )
+            )
 
 
 def handle_slack_event(data):
@@ -50,24 +67,12 @@ def handle_slack_event(data):
 
         if response.ok:
             dify_msg = response.json()
-            answer = json.loads(dify_msg["answer"])
-            result = process_dify(answer, channel)
-
-            if not result:
-                return
-            url = result["url"]
-            role = answer["role"]
-
-            (
-                bot_client.chat_postMessage(
-                    channel=channel,
-                    text=f"{answer['msg']}: {url}"
-                    + f"\nThis task may be related to {role}.\n It has been assigned to <@{config.role_to_slack_id[role]}>.\n If I misunderstood the task, please re-assign yourself later.",
-                )
+            answer = json.loads(
+                (dify_msg["answer"].replace("```json\n", "").replace("\n```", ""))
             )
-
+            process_dify(answer, channel)
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error: {e}")
+        shared_logger.error(f"Error: {e}")
         raise e
 
 
@@ -83,7 +88,7 @@ def slack_events():
         if data["event"]["user"] != secret.my_slack_id:
             bot_client.chat_postMessage(
                 channel=data["event"]["channel"],
-                text="Sorry, temporarily I only serve to Hans",
+                text="Sorry, temporarily I only serve to Hans Wu",
             )
         else:
             bot_client.chat_postMessage(

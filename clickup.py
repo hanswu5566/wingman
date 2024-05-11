@@ -3,15 +3,17 @@ import time
 import config
 import secret
 import requests
-from log import logger
+from logger import shared_logger
 
-def create_clickup_ticket(title: str, desc: str, roles: list[str]):
+
+headers = {
+    "Authorization": f"{secret.clickup_token}",
+    "Content-Type": "application/json",
+}
+
+
+def get_target_list():
     try:
-        headers = {
-            "Authorization": f"{secret.clickup_token}",
-            "Content-Type": "application/json",
-        }
-
         get_folder_url = f"https://api.clickup.com/api/v2/folder/{secret.product_infra_sprint_folder_id}"
         response = requests.get(get_folder_url, headers=headers)
 
@@ -32,9 +34,20 @@ def create_clickup_ticket(title: str, desc: str, roles: list[str]):
                 target_list = list
 
             if not target_list:
-                logger.error("Error: list not found")
+                shared_logger.error("Error: list not found")
                 return
 
+            return target_list
+
+    except:
+        shared_logger.error("\n* Function (Get list) Failed * ", sys.exc_info())
+
+
+def create_clickup_ticket(
+    title: str, desc: str, roles: list[str], priority: str, duration: int
+):
+    try:
+        target_list = get_target_list()
         create_task_url = (
             "https://api.clickup.com/api/v2/list/" + target_list["id"] + "/task"
         )
@@ -42,10 +55,13 @@ def create_clickup_ticket(title: str, desc: str, roles: list[str]):
         payload = {
             "name": title,
             "description": desc,
-            "assignees": [config.role_to_clickup_id[role] for role in roles if role in config.role_to_clickup_id],
-            "custom_fields": [
-                {"id": "d987dc02-abc2-4e3a-a350-442f7ca04e27", "value": 9},
+            "assignees": [
+                config.role_to_clickup_id[role]
+                for role in roles
+                if role in config.role_to_clickup_id
             ],
+            "priority": priority,
+            "due_date": (int(time.time() * 1000) + duration) if duration else None,
         }
 
         response = requests.post(create_task_url, json=payload, headers=headers)
@@ -53,4 +69,4 @@ def create_clickup_ticket(title: str, desc: str, roles: list[str]):
         return data
 
     except:
-        logger.error("\n* Function (create_task) Failed * ", sys.exc_info())
+        shared_logger.error("\n* Function (create_task) Failed * ", sys.exc_info())
