@@ -5,7 +5,6 @@ import secret
 import requests
 from logger import shared_logger
 
-
 headers = {
     "Authorization": f"{secret.clickup_token}",
     "Content-Type": "application/json",
