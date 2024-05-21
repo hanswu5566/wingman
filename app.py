@@ -19,10 +19,10 @@ def slack_events():
         return jsonify({"challenge": data["challenge"]})
 
     if "event" in data:
-        if data["event"]["user"] != secret.my_slack_id:
+        if data["event"]["user"] not in secret.whitelist_slack_id:
             bot_client.chat_postMessage(
                 channel=data["event"]["channel"],
-                text="Sorry, temporarily I only serve to Hans Wu",
+                text="Sorry, you're not in the whitelist",
             )
         else:
             bot_client.chat_postMessage(
@@ -34,4 +34,4 @@ def slack_events():
 
 
 if __name__ == "__main__":
-    app.run(port=8000)
+    app.run(debug=True,port=8000)

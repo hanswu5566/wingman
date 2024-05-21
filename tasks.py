@@ -29,7 +29,6 @@ def process_dify(answer, channel):
                 )
             )
 
-
 @app.task
 def handle_slack_event(data):
     text = data["event"]["text"]
