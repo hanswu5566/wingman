@@ -7,7 +7,7 @@ from celery import Celery
 from slack import WebClient
 from logger import shared_logger
 
-celery_instance = Celery('ai-me-task', broker=config.redis_url,backend=config.redis_url)
+celery_instance = Celery('ai-me-celery', broker=config.redis_url,backend=config.redis_url)
 bot_client = WebClient(token=secret.bot_token)
 
 def process_dify(answer, channel):
