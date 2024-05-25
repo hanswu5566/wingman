@@ -3,7 +3,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 dify_token = os.getenv('dify_token')
 clickup_token = os.getenv('clickup_token')
 bot_token = os.getenv('bot_token')

@@ -1,4 +1,10 @@
-dify_base_url = "https://api.dify.ai/v1"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+dify_base_url = os.getenv('dify_url')
+redis_url = os.getenv('redis_url')
 
 role_to_slack_id = {
     "Product Manager": "U05S521VB1N",
@@ -19,3 +25,9 @@ role_to_clickup_id = {
     "Web": 5706438,
     "Engineering Manager":1026903,
 }
+
+product_infra_ticket_list_id = "900901259853"
+product_infra_sprint_folder_id = "90091061131"
+
+bot_slack_id = "U028NRCSKJM"
+whitelist_slack_id = ["U05S521VB1N","U0327PUKEAD"]

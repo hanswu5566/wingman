@@ -10,10 +10,9 @@ headers = {
     "Content-Type": "application/json",
 }
 
-
 def get_target_list():
     try:
-        get_folder_url = f"https://api.clickup.com/api/v2/folder/{secret.product_infra_sprint_folder_id}"
+        get_folder_url = f"https://api.clickup.com/api/v2/folder/{config.product_infra_sprint_folder_id}"
         response = requests.get(get_folder_url, headers=headers)
 
         if response.ok:

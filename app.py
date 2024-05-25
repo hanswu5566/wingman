@@ -1,5 +1,6 @@
 import secret
-from tasks import handle_slack_event
+import config
+from celery_app import celery_instance,handle_slack_event
 from slack import WebClient
 from flask import Flask, request, jsonify
 
@@ -10,6 +11,15 @@ bot_client = WebClient(token=secret.bot_token)
 def hello():
     return jsonify({"msg":"hello, are you Hans?"})
 
+@app.route("/celery/hearbeat",methods=["GET"])
+def check_celery():
+    i = celery_instance.control.inspect()
+    active_workers = i.active()
+    if active_workers:
+        return jsonify(status="alive"), 200
+    else:
+        return jsonify(status="dead"), 503
+
 @app.route("/slack/events", methods=["POST"])
 def slack_events():
     data = request.json  # Get JSON data from the request
@@ -19,7 +29,7 @@ def slack_events():
         return jsonify({"challenge": data["challenge"]})
 
     if "event" in data:
-        if data["event"]["user"] not in secret.whitelist_slack_id:
+        if data["event"]["user"] not in config.whitelist_slack_id:
             bot_client.chat_postMessage(
                 channel=data["event"]["channel"],
                 text="Sorry, you're not in the whitelist",
@@ -34,4 +44,4 @@ def slack_events():
 
 
 if __name__ == "__main__":
-    app.run(debug=True,port=8000)
+    app.run(debug=True,port=8000,use_reloader=False)
