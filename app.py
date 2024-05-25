@@ -11,7 +11,7 @@ bot_client = WebClient(token=secret.bot_token)
 def hello():
     return jsonify({"msg":"hello, are you Hans?"})
 
-@app.route("/celery/hearbeat",methods=["GET"])
+@app.route("/celery/heartbeat",methods=["GET"])
 def check_celery():
     i = celery_instance.control.inspect()
     active_workers = i.active()
@@ -44,4 +44,4 @@ def slack_events():
 
 
 if __name__ == "__main__":
-    app.run(debug=True,port=8000,use_reloader=False)
+    app.run(port=8000)
