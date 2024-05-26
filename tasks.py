@@ -2,32 +2,9 @@ import secret
 import requests
 import config
 import json
-import clickup
-from celery import Celery
-from slack import WebClient
+from dify import process_dify
+from extensions import celery_instance
 from logger import shared_logger
-
-celery_instance = Celery('ai-me-celery', broker=config.redis_url,backend=config.redis_url)
-bot_client = WebClient(token=secret.bot_token)
-
-def process_dify(answer, channel):
-    # Respond typical error message
-    if "action" not in answer:
-        bot_client.chat_postMessage(channel=channel, text=answer["msg"])
-        return
-
-    action = answer["action"]
-
-    # Trigger clickup ticket creation
-    if action == "create_ticket":
-        res = clickup.create_clickup_ticket(answer)
-        if res:
-            url = res["url"]
-            (
-                bot_client.chat_postMessage(
-                    channel=channel, text=f"{answer['msg']}: {url}"
-                )
-            )
 
 @celery_instance.task
 def handle_slack_event(data):
