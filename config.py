@@ -5,6 +5,8 @@ load_dotenv()
 
 dify_base_url = os.getenv('dify_url')
 redis_url = os.getenv('redis_url')
+postgres_url = os.getenv('postgres_url')
+slack_redirect_url = os.getenv('slack_redirect_url')
 
 role_to_slack_id = {
     "Product Manager": "U05S521VB1N",
