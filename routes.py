@@ -6,7 +6,7 @@ from config import whitelist_slack_id,slack_redirect_url
 from user import User
 from oauth import oauth
 from db import db
-
+from event_handlers import handle_challenge
 import slack_sdk
 
 def register_routes(app):
@@ -36,24 +36,15 @@ def register_routes(app):
     @app.route("/slack/events", methods=["POST"])
     def slack_events():
         try:
-            data = request.json  # Get JSON data from the request
-            # Check if this is a challenge request
-            if "challenge" in data:
-                # Respond with the challenge value to verify this endpoint
-                return jsonify({"challenge": data["challenge"]})
+            data = request.json 
+            handle_challenge()
 
             if "event" in data:
-                if data["event"]["user"] not in whitelist_slack_id:
-                    bot_client.chat_postMessage(
-                        channel=data["event"]["channel"],
-                        text="Sorry, you're not in the whitelist",
-                    )
-                else:
-                    bot_client.chat_postMessage(
-                        channel=data["event"]["channel"], text="OK, please wait...."
-                    )
+                bot_client.chat_postMessage(
+                    channel=data["event"]["channel"], text="OK, please wait...."
+                )
 
-                    handle_slack_event.delay(data)
+                handle_slack_event.delay(data)
 
             return jsonify({})
         except Exception as e:
@@ -93,6 +84,7 @@ def register_routes(app):
                         user = User(slack_user_id=slack_user_id, team_id=team_id,email=email, name=name)
                         db.session.add(user)
                         db.session.commit()
+
                         print("Add user successfully")
                     else:
                         app.logger.error(f"User not retrieved from slack api : {e}")
