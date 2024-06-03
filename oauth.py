@@ -1,10 +1,12 @@
 from secret import slack_client_id,slack_client_secret
 from authlib.integrations.flask_client import OAuth
+from flask import Flask
 
+oauth = OAuth()
 
-def init_oauth(app):
+def init_oauth(app:Flask):
 
-    oauth = OAuth(app)
+    oauth.init_app(app=app)
     oauth.register(
         'slack',
         client_id=slack_client_id,
@@ -13,8 +15,6 @@ def init_oauth(app):
         authorize_params=None,
         access_token_url='https://slack.com/api/oauth.v2.access',
         access_token_params=None,
-        client_kwargs={'scope': 'users:read users:read.email'},
+        client_kwargs={'scope': 'users:read,users:read.email,app_mentions:read,channels:read,chat:write'},
     )
-
-    return oauth
 

@@ -3,11 +3,20 @@ from flask import request, session,redirect, jsonify,url_for
 from tasks import handle_slack_event
 from extensions import celery_instance, bot_client
 from config import whitelist_slack_id,slack_redirect_url
+from user import User
+from oauth import oauth
+from db import db
 
-def register_routes(app,oauth,db):
+import slack_sdk
+
+def register_routes(app):
     @app.route("/", methods=["GET"])
     def index():
         return '''
+        <head>
+        <link rel="icon" href="/favicon.ico" type="image/x-icon">
+        </head>
+
         <h1>Welcome to the Slack OAuth Demo!</h1>
         <a href="/slack/login">
             <img alt="Sign in with Slack" height="40" width="172"
@@ -64,14 +73,35 @@ def register_routes(app,oauth,db):
     
     @app.route('/slack/login/authorize')
     def authorize():
-        token = oauth.slack.authorize_access_token()
-        session['token'] = token
-        print(token)
-            
-        # user = User.query.filter_by(slack_id=slack_id).first()
-        # if not user:
-        #     user = User(slack_id=slack_id, email=email, name=name)
-        #     db.session.add(user)
-        #     db.session.commit()
+        try:
+            token = oauth.slack.authorize_access_token()
+            if token['ok']:
+                access_token = token['access_token']
+                slack_user_id = token['authed_user']['id']
+
+                # check if the user already exists in database
+                user = User.query.filter_by(slack_user_id=slack_user_id).first()
+
+                if not user:
+                    info = slack_sdk.WebClient(token=access_token).users_info(user=slack_user_id)
+                    if info['ok']:
+                        user = info['user']
+                        name = user['name']
+                        team_id = user['team_id']
+                        email = user['profile']['email']
+
+                        user = User(slack_user_id=slack_user_id, team_id=team_id,email=email, name=name)
+                        db.session.add(user)
+                        db.session.commit()
+                        print("Add user successfully")
+                    else:
+                        app.logger.error(f"User not retrieved from slack api : {e}")
+            else:
+                app.logger.error(f"OAuth failed: {e}")
+        except Exception as e:
+            app.logger.error(f"Error in OAuth : {e}")
+            return jsonify({"error": "Internal Server Error"}), 500
 
         return jsonify({})
+    
+
