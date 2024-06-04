@@ -1,18 +1,18 @@
 import sys
 import time
-import config
-import secret
 import requests
+from .config import Config
+from .secret import Secret
 from logger import shared_logger
 
 headers = {
-    "Authorization": f"{secret.clickup_token}",
+    "Authorization": f"{Secret.clickup_token}",
     "Content-Type": "application/json",
 }
 
 def get_target_list():
     try:
-        get_folder_url = f"https://api.clickup.com/api/v2/folder/{config.product_infra_sprint_folder_id}"
+        get_folder_url = f"https://api.clickup.com/api/v2/folder/{Config.product_infra_sprint_folder_id}"
         response = requests.get(get_folder_url, headers=headers)
 
         if response.ok:
@@ -59,9 +59,9 @@ def create_clickup_ticket(answer):
             "name": title,
             "description": desc,
             "assignees": [
-                config.role_to_clickup_id[role]
+                Config.role_to_clickup_id[role]
                 for role in roles
-                if role in config.role_to_clickup_id
+                if role in Config.role_to_clickup_id
             ],
             "priority": priority,
             "due_date": (int(time.time() * 1000) + duration) if duration else None,

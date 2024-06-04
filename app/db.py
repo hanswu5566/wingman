@@ -1,18 +1,16 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
-from config import postgres_url
 from flask_migrate import Migrate
+from .config import Config
 
 db = SQLAlchemy()
 migrate = Migrate()
 
 def init_db(app:Flask):
     # Configure the PostgreSQL database URI
-    app.config['SQLALCHEMY_DATABASE_URI'] = postgres_url
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
     # Initialize SQLAlchemy
+    app.config.from_object(Config)
     db.init_app(app=app)
 
     @app.before_request

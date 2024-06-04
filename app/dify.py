@@ -1,11 +1,10 @@
-from extensions import bot_client
-from clickup import create_clickup_ticket
-
+from .extensions import slack_bot_client
+from .clickup import create_clickup_ticket
 
 def process_dify(answer, channel):
     # Respond typical error message
     if "action" not in answer:
-        bot_client.chat_postMessage(channel=channel, text=answer["msg"])
+        slack_bot_client.chat_postMessage(channel=channel, text=answer["msg"])
         return
 
     action = answer["action"]
@@ -16,7 +15,7 @@ def process_dify(answer, channel):
         if res:
             url = res["url"]
             (
-                bot_client.chat_postMessage(
+                slack_bot_client.chat_postMessage(
                     channel=channel, text=f"{answer['msg']}: {url}"
                 )
             )

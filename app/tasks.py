@@ -1,23 +1,23 @@
-import secret
 import requests
-import config
 import json
-from dify import process_dify
-from extensions import celery_instance
+from .secret import Secret
+from .config import Config
+from .dify import process_dify
+from .extensions import celery_instance
 from logger import shared_logger
 
 @celery_instance.task
 def handle_slack_event(data):
     text = data["event"]["text"]
     channel = data["event"]["channel"]
-    tag_pattern = f"<@{config.bot_slack_id}>"
+    tag_pattern = f"<@{Config.BOT_SLACK_ID}>"
     cleaned_msg = text.replace(tag_pattern, "").strip()
 
     try:
         response = requests.post(
-            f"{config.dify_base_url}/chat-messages",
+            f"{Config.DIFY_BASE_URL}/chat-messages",
             headers={
-                "Authorization": f"Bearer {secret.dify_token}",
+                "Authorization": f"Bearer {Secret.dify_token}",
                 "Content-Type": "application/json",
             },
             json={
