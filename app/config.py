@@ -1,10 +1,15 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 class Config:
-    dify_base_url = os.getenv('dify_url')
-    redis_url = os.getenv('redis_url')
-    postgres_url = os.getenv('postgres_url')
-    slack_redirect_url = os.getenv('slack_redirect_url')
+    DIFY_BASE_URL = os.getenv('dify_url')
+    REDIS_URL = os.getenv('redis_url')
+    SLACK_REDIRECT_URL = os.getenv('slack_redirect_url')
+
+    SQLALCHEMY_DATABASE_URI = os.environ.get('postgres_url')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     role_to_slack_id = {
         "Product Manager": "U05S521VB1N",
@@ -29,5 +34,5 @@ class Config:
     product_infra_ticket_list_id = "900901259853"
     product_infra_sprint_folder_id = "90091061131"
 
-    bot_slack_id = "U028NRCSKJM"
-    whitelist_slack_id = ["U05S521VB1N","U0327PUKEAD"]
+    BOT_SLACK_ID = "U028NRCSKJM"
+    WHITELIST_SLACK_ID = ["U05S521VB1N","U0327PUKEAD"]

@@ -1,5 +1,5 @@
-from app.extensions import slack_bot_client
-from app.clickup import create_clickup_ticket
+from .extensions import slack_bot_client
+from .clickup import create_clickup_ticket
 
 def process_dify(answer, channel):
     # Respond typical error message

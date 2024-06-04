@@ -1,5 +1,4 @@
 import os
-from dotenv import load_dotenv
 
 class Secret:
     dify_token = os.getenv('dify_token')

@@ -1,8 +1,8 @@
 import sys
 import time
 import requests
-from app.config import Config
-from app.secret import Secret
+from .config import Config
+from .secret import Secret
 from logger import shared_logger
 
 headers = {
