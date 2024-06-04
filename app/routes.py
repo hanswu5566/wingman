@@ -1,12 +1,12 @@
 # routes.py
 from flask import request, session,redirect, jsonify,url_for
-from tasks import handle_slack_event
-from extensions import celery_instance, bot_client
-from config import whitelist_slack_id,slack_redirect_url
-from user import User
-from oauth import oauth
-from db import db
-from event_handlers import handle_challenge
+from app.tasks import handle_slack_event
+from app.extensions import celery_instance, slack_bot_client
+from app.config import Config
+from app.models import User
+from app.oauth import oauth
+from app.db import db
+from app.event_handlers import handle_challenge
 import slack_sdk
 
 def register_routes(app):
@@ -40,7 +40,7 @@ def register_routes(app):
             handle_challenge()
 
             if "event" in data:
-                bot_client.chat_postMessage(
+                slack_bot_client.chat_postMessage(
                     channel=data["event"]["channel"], text="OK, please wait...."
                 )
 
@@ -55,7 +55,7 @@ def register_routes(app):
 
     @app.route('/slack/login')
     def login():
-        return oauth.slack.authorize_redirect(slack_redirect_url)
+        return oauth.slack.authorize_redirect(Config.slack_redirect_url)
     
     @app.route('/slack/logout')
     def logout():
