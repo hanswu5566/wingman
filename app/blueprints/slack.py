@@ -27,15 +27,9 @@ def slack_events():
     if "event" in payload:
         event = payload['event']
         user_id = event['user']
-        channel = event['channel']
-        text = event['text']
 
         if not User.is_member(user_id):
             send_onboarding_msg(user_id)
 
-
-
-
-        
     
     return jsonify({})

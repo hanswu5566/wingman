@@ -18,9 +18,15 @@ def login():
 @clickup_auth_bp.route('/login/authorize')
 def authorize():
     code = request.args.get('code')
+    state = request.args.get('state')
+    user_id, channel_id = state.split(',')
+
     if not code:
         return jsonify({"err": "Authorization code not found", "ECODE": "AUTH_001"}), 400
     
+    if not User.is_member(user_id):
+        return jsonify({{"err": "Member not found", "ECODE": "AUTH_002"}}),400
+
     token_url = 'https://app.clickup.com/api/v2/oauth/token'
     payload = {
         'client_id': Secret.CLICKUP_CLIENT_ID,
@@ -31,8 +37,15 @@ def authorize():
     try:
         res = requests.post(token_url, params=payload)
         if res.ok:
-            session['token'] = res.json()['access_token']
+            session['clickup_token'] = res.json()['access_token']
+            user = User.query.filter_by(slack_user_id=user_id).first()
+            if user:
+                user.clickup_token = session['clickup_token']
+                db.session.commit()
 
+                return jsonify({'message': 'ClickUp token updated successfully!'}), 200
+        else:
+            logger.error("Authorized Failed")
 
     except Exception as e:
         logger.error(e)

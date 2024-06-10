@@ -1,11 +1,37 @@
-from flask import jsonify
+from flask import jsonify,redirect
 from ..extensions import slack_bot_client
 from slack_sdk.errors import SlackApiError
-from ..texts.slack import  UserAction ,ONBOARDING_MSG,SETUP_MSG
 from ..models.user import User
-import requests
+from ..config import Config
 from logger import shared_logger
 from copy import deepcopy
+
+
+class UserAction:
+    SIGN_UP = 'sign_up'
+    SETUP= 'setup'
+    SELECT_MANAGEMENT_TOOL = 'select_management_tool'
+
+
+
+ONBOARDING_MSG = {
+	"blocks": [
+		{
+			"type": "header",
+			"text": {
+				"type": "plain_text",
+				"text": "Welcome to Wingman! 🎉"
+			}
+		},
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "Welcome to Wingman! We are thrilled to have you join us. \nWingman is an AI assistant designed to elevate your productivity by leveraging Large Language Models (LLM) to seamlessly integrate with project management software and streamline your daily task management.\n"
+			}
+		},
+	]
+}
 
 
 def handle_challenge(data):
@@ -14,7 +40,6 @@ def handle_challenge(data):
         return jsonify({"challenge": data["challenge"]})
     
 def open_setup_modal(trigger_id):
-    print(trigger_id)
     modal_view = {
         "type": "modal",
         "callback_id": "modal-identifier",
@@ -51,23 +76,22 @@ def open_setup_modal(trigger_id):
 
     slack_bot_client.views_open(trigger_id=trigger_id,view=modal_view)
 
-
-
 def handle_interactivities(payload):
     action_id = payload['actions'][0]['action_id']
-
     if action_id == UserAction.SIGN_UP:
         user = payload['user']
-        new_user = User(
-            slack_user_id=user['id'],
-            slack_team_id=user['team_id'],
-            slack_name=user['name'],
-        )
 
-        # db.session.add(new_user)
-        # db.session.commit()
+        if not User.is_member(user['id']):
+            new_user = User(
+                slack_user_id=user['id'],
+                slack_team_id=user['team_id'],
+                slack_name=user['name'],
+            )
 
-        send_setup_management_tool_msg(channel_id=payload['channel']['id'],user_id=user['id'],ts=payload['message']['ts'])
+            # db.session.add(new_user)
+            # db.session.commit()
+        
+            send_select_management_tool_msg(channel_id=payload['channel']['id'],user_id=user['id'],ts=payload['message']['ts'])
 
     elif action_id == UserAction.SETUP:
         trigger_id = payload['trigger_id']
@@ -75,71 +99,68 @@ def handle_interactivities(payload):
             open_setup_modal(trigger_id)
         except SlackApiError as e:
             shared_logger.error(f"Error sending message: {e.response['error']}")
+    elif action_id == UserAction.SELECT_MANAGEMENT_TOOL:
+        selected_option = payload['actions']
+        if selected_option:
+            if selected_option['value'] =='clickup':
+                return redirect(f'{Config.CLICKUP_REDIRECT_URL}&state={payload['user']['id']},{payload['channel']['id']}')
+
+        return jsonify({'status': 'ok'})
 
 
-def send_setup_management_tool_msg(channel_id:str,user_id:str,ts=None):
+def send_configure_management_tool_msg(channel_id:str,user_id,ts=None):
+    if not User.is_member(user_id):
+        return jsonify({{"err": "Member not found", "ECODE": "AUTH_002"}}),400
+    
+    user = User.query.filter_by(slack_user_id=user_id).first()
+    print(user.clickup_token)
+
+
+
+def send_select_management_tool_msg(channel_id:str,user_id:str,ts=None):
     msg = deepcopy(ONBOARDING_MSG)
     msg['blocks'].extend([{
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": f"Hello <@{user_id}> \n You've completed sign up process. \n It's almost done. Let's pick and setup the management tool"
+            "text": f"Hello <@{user_id}> \n You've completed sign up process. \n It's almost done. Let's integrate your management tool to finish it."
         }
     },
     {
         "type": "input",
         "element": {
-            "type": "multi_static_select",
+            "type": "static_select",
             "placeholder": {
                 "type": "plain_text",
-                "text": "Select options",
+                "text": "Select your management tool",
                 "emoji": True
             },
             "options": [
                 {
                     "text": {
                         "type": "plain_text",
-                        "text": "*plain_text option 0*",
-                        "emoji": True
+                        "text": "Clickup",
                     },
-                    "value": "value-0"
-                },
-                {
-                    "text": {
-                        "type": "plain_text",
-                        "text": "*plain_text option 1*",
-                        "emoji": True
-                    },
-                    "value": "value-1"
-                },
-                {
-                    "text": {
-                        "type": "plain_text",
-                        "text": "*plain_text option 2*",
-                        "emoji": True
-                    },
-                    "value": "value-2"
+                    "value": "clickup"
                 }
             ],
-            "action_id": "multi_static_select-action"
+            "action_id": UserAction.SELECT_MANAGEMENT_TOOL
         },
         "label": {
             "type": "plain_text",
-            "text": "Label",
+            "text": "Select an item",
             "emoji": True
         }
-    }
-    
-        # {
-        #     "type": "button",
-        #     "text": {
-        #         "type": "plain_text",
-        #         "text": "Setup management tool"
-        #     },
-        #     "style": "primary",
-        #     "action_id": UserAction.SETUP
-        # }
-    
+    },
+    {
+        "type": "context",
+        "elements": [
+            {
+                "type": "plain_text",
+                "text": "By now, only Clickup is supported.",
+            }
+        ]
+    }   
     ])
 
     try:
