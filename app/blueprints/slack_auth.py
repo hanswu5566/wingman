@@ -6,18 +6,18 @@ from slack_sdk import WebClient
 from ..config import Config
 from ..logger import logger
 
-auth_bp = Blueprint('auth', __name__)
+slack_auth_bp = Blueprint('slack_auth', __name__)
 
-@auth_bp.route("/slack/login")
+@slack_auth_bp.route("/login")
 def login():
     return oauth.slack.authorize_redirect(Config.SLACK_REDIRECT_URL)
 
-@auth_bp.route("/slack/logout")
+@slack_auth_bp.route("/logout")
 def logout():
     session.pop('slack_token')
     return redirect(url_for('index'))
 
-@auth_bp.route('/slack/login/authorize')
+@slack_auth_bp.route('/login/authorize')
 def authorize():
     try:
         token = oauth.slack.authorize_access_token()

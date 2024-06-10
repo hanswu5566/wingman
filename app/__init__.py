@@ -6,8 +6,9 @@ from .oauth import init_oauth
 from .config import Config
 from .logger import logger
 from .models import *
-from .blueprints.auth import auth_bp
+from .blueprints.slack_auth import slack_auth_bp
 from .blueprints.slack import slack_bp
+from .blueprints.clickup_auth import clickup_auth_bp
 
 def create_app():
     app = Flask(__name__)
@@ -22,8 +23,9 @@ def create_app():
     app.logger.handlers = logger.handlers
     app.logger.setLevel(logger.level)
 
-    app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(slack_auth_bp, url_prefix='/slackAuth')
     app.register_blueprint(slack_bp,url_prefix='/slack')
+    app.register_blueprint(clickup_auth_bp,url_prefix='/clickup')
 
     return app
 
