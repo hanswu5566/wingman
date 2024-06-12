@@ -6,7 +6,7 @@ from .secret import Secret
 from logger import shared_logger
 
 headers = {
-    "Authorization": f"{Secret.clickup_token}",
+    "Authorization": f"{Secret.CLICKUP_TOKEN}",
     "Content-Type": "application/json",
 }
 

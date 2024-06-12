@@ -17,7 +17,7 @@ def handle_slack_event(data):
         response = requests.post(
             f"{Config.DIFY_BASE_URL}/chat-messages",
             headers={
-                "Authorization": f"Bearer {Secret.dify_token}",
+                "Authorization": f"Bearer {Secret.DIFY_TOKEN}",
                 "Content-Type": "application/json",
             },
             json={

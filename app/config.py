@@ -8,6 +8,7 @@ class Config:
     REDIS_URL = os.getenv('redis_url')
     SLACK_REDIRECT_URL = os.getenv('slack_redirect_url')
 
+    CLICKUP_REDIRECT_URL=os.getenv('clickup_redirect_url')
     SQLALCHEMY_DATABASE_URI = os.environ.get('postgres_url')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
