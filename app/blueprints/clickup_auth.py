@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify,request, session
 from ..models import User
 from ..db import db
 from ..oauth import oauth
-from ..handlers.slack import send_configure_target_list
+from ..handlers.slack import send_configure_clickup_initial_msg
 from ..handlers.clickup import get_authorized_user,get_workspaces
 from ..config import Config
 from ..logger import logger
@@ -20,7 +20,6 @@ def authorize():
     code = request.args.get('code')
     state = request.args.get('state')
     user_id, channel_id,ts = state.split(',')
-    send_configure_target_list(channel_id=channel_id,user_id=user_id,ts=ts)
 
     if not code:
         return jsonify({"err": "Authorization code not found", "ECODE": "AUTH_001"}), 400
@@ -41,6 +40,7 @@ def authorize():
             access_token = res.json()['access_token']
             clickup_user = get_authorized_user(access_token)
             clickup_workspaces = get_workspaces(access_token)
+            
             user = User.query.filter_by(slack_user_id=user_id).first()
 
             if user and not user.clickup_token:
@@ -55,7 +55,6 @@ def authorize():
                 user.clickup_workspaces = ws
                 db.session.commit()
 
-                send_configure_target_list(channel_id=channel_id,user_id=user_id,ts=ts)
                 return jsonify({'message': 'Okey dokey'}), 200
             else:
                 return jsonify({'message':'Not thing to do'}),200

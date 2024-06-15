@@ -1,8 +1,9 @@
-from flask import jsonify,redirect
+from flask import jsonify
 from ..extensions import slack_bot_client
 from slack_sdk.errors import SlackApiError
 from ..models.user import User
 from ..config import Config
+from .clickup import get_spaces
 from logger import shared_logger
 from copy import deepcopy
 from ..db import db
@@ -11,8 +12,7 @@ class UserAction:
     SIGN_UP = 'sign_up'
     SELECT_WORKSPACE= 'select_workspace'
     SELECT_SPACE = 'select_space'
-    SELECT_FOLDER='select_folder'
-    SELECT_LIST = 'select_list'
+    OPEN_SETUP_MODAL = 'open_setup_modal'
     CONNECT_TO_CLICKUP = 'connect_to_clickup'
 
 ONBOARDING_MSG = {
@@ -34,50 +34,11 @@ ONBOARDING_MSG = {
 	]
 }
 
-
 def handle_challenge(data):
     if "challenge" in data:
         # Respond with the challenge value to verify this endpoint
         return jsonify({"challenge": data["challenge"]})
     
-def open_setup_modal(trigger_id):
-    modal_view = {
-        "type": "modal",
-        "callback_id": "modal-identifier",
-        "title": {
-            "type": "plain_text",
-            "text": "My Modal"
-        },
-        "blocks": [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "This is a modal window"
-                }
-            },
-            {
-                "type": "input",
-                "block_id": "input_block",
-                "label": {
-                    "type": "plain_text",
-                    "text": "Your Input"
-                },
-                "element": {
-                    "type": "plain_text_input",
-                    "action_id": "input_value"
-                }
-            },
-        ],
-        "submit": {
-						"type": 'plain_text',
-						"text": 'Submit',
-					},
-    }
-    try:
-        slack_bot_client.views_open(trigger_id=trigger_id,view=modal_view)
-    except SlackApiError as e:
-        shared_logger.error(f"Error sending message: {e.response['error']}")
 
 def handle_interactivities(payload):
     action_id = payload['actions'][0]['action_id']
@@ -95,11 +56,15 @@ def handle_interactivities(payload):
             db.session.commit()
             send_connect_to_clickup_msg(channel_id=payload['channel']['id'],user_id=user['id'],ts=payload['message']['ts'])
     elif action_id == UserAction.SELECT_WORKSPACE:
-        trigger_id = payload['trigger_id']
-        open_setup_modal(trigger_id)
-        return jsonify({})
+        selected_workspace = payload['actions'][0]['selected_option']['value']
+        print(payload['actions'][0])
+        
+        
 
-def send_configure_target_list(channel_id,user_id,ts=None):
+        return jsonify({})
+    
+
+def send_configure_clickup_initial_msg(channel_id,user_id,ts=None):
     if not User.get_member(user_id):
         shared_logger.error({"err": f"Member not found:{user_id}", "ECODE": "AUTH_002"})
         return jsonify(),404
@@ -109,31 +74,33 @@ def send_configure_target_list(channel_id,user_id,ts=None):
     if not user.clickup_token:
         shared_logger.error({"err": f"Clickup token not found:{user_id}", "ECODE": "AUTH_003"})
         return jsonify(),404
-
+    
 
     blocks = [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "You've connected to Clickup."
-                },
-                "accessory": {
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Almost done, this is the last step."
+            }
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
                     "type": "button",
-                    "action_id": "select_workspace",
                     "text": {
                         "type": "plain_text",
-                        "emoji": True,
-                        "text": "Configure Clickup settings"
-				    },
-                    "style":"primary"
+                        "text": "Setup target workspace and folders"
+                    },
+                    "action_id": UserAction.OPEN_SETUP_MODAL
                 }
-            }
+            ]
+        }
     ]
-
+    
     msg = deepcopy(ONBOARDING_MSG) if ts else {}
     msg['blocks'].extend(blocks)
-
 
     try:
         if not ts:
@@ -152,35 +119,10 @@ def send_configure_target_list(channel_id,user_id,ts=None):
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
 
-def send_configure_clickup_spaces_msg(channel_id,user_id,ts=None):
-    if not User.get_member(user_id):
-        shared_logger.error({"err": f"Member not found:{user_id}", "ECODE": "AUTH_002"})
-        return jsonify(),404
-    
-    user = User.query.filter_by(slack_user_id=user_id).first()
-
-    if not user.clickup_token:
-        shared_logger.error({"err": f"Clickup token not found:{user_id}", "ECODE": "AUTH_003"})
-        return jsonify(),404
-
-
-    msg = deepcopy(ONBOARDING_MSG)
-    msg['blocks'].extend([{
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": "Select the target lists you want to manage ClickUp tasks in."
-        }
-    },
-    ])
-
-
-
-
 
 def send_connect_to_clickup_msg(channel_id:str,user_id:str,ts=None):
     msg = deepcopy(ONBOARDING_MSG) if ts else {}
-    
+
     msg['blocks'].extend([{
         "type": "section",
         "text": {
