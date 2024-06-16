@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify,request, session
 from ..models import User
 from ..db import db
 from ..oauth import oauth
-from ..handlers.slack import send_configure_clickup_initial_msg
-from ..handlers.clickup import get_authorized_user,get_workspaces
+from ..handlers.slack import send_configure_workspace_initial_msg
+from ..handlers.clickup import get_authorized_user,get_workspaces,get_spaces
 from ..config import Config
 from ..logger import logger
 from ..secret import Secret
@@ -40,7 +40,7 @@ def authorize():
             access_token = res.json()['access_token']
             clickup_user = get_authorized_user(access_token)
             clickup_workspaces = get_workspaces(access_token)
-            
+
             user = User.query.filter_by(slack_user_id=user_id).first()
 
             if user and not user.clickup_token:
@@ -48,19 +48,13 @@ def authorize():
                 user.clickup_user_id = clickup_user['user']['id']
                 user.clickup_user_name = clickup_user['user']['username']
 
-                ws =[]
-                for team in clickup_workspaces['teams']:
-                    ws.append({"id":team['id'],"name":team['name']})
+                team = clickup_workspaces['teams'][0]
+                spaces = get_spaces(team['id'],access_token)
+                user.clickup_workspace = {"id":team['id'],"name":team['name'],'spaces':spaces["spaces"]}
 
-                user.clickup_workspaces = ws
                 db.session.commit()
-
-                return jsonify({'message': 'Okey dokey'}), 200
-            else:
-                return jsonify({'message':'Not thing to do'}),200
-        else:
-            logger.error("Authorized Failed")
-
+                send_configure_workspace_initial_msg(channel_id,user_id,ts)
+                return jsonify({'msg':'You can close the screen and get back to Slack'})
     except Exception as e:
         logger.error(e)
         return jsonify({"Internal Server Error"}), 500

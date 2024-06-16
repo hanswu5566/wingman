@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from ..handlers.slack import send_onboarding_msg,handle_interactivities,send_connect_to_clickup_msg
+from ..handlers.slack import send_onboarding_msg,handle_interactivities,send_connect_to_clickup_msg,send_configure_workspace_initial_msg
 from slack_sdk.errors import SlackApiError
 from ..extensions import slack_bot_client
 from ..models.user import User
@@ -35,7 +35,8 @@ def slack_events():
         else:
             if not member.clickup_token:
                 send_connect_to_clickup_msg(channel_id=user_id,user_id=user_id)
-            else:
-                return jsonify({"shit":'shit'})
+            elif not member.clickup_workspaces or not member.clickup_folders :
+                send_configure_workspace_initial_msg(channel_id=user_id,user_id=user_id)
+    
     
     return jsonify({})

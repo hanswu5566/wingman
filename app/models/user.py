@@ -12,8 +12,7 @@ class User(db.Model):
     clickup_user_id = db.Column(db.String(80), unique=True, nullable=True)
     clickup_user_name = db.Column(db.String(120), nullable=True)
 
-    clickup_workspaces = db.Column(JSON, nullable=True)
-    clickup_folders = db.Column(JSON, nullable=True)
+    clickup_workspace = db.Column(JSON, nullable=True)
 
     @classmethod
     def get_member(cls,slack_user_id):
