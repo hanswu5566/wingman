@@ -3,7 +3,6 @@ from ..extensions import slack_bot_client
 from slack_sdk.errors import SlackApiError
 from ..models.user import User
 from ..config import Config
-from .clickup import get_workspaces
 from logger import shared_logger
 from copy import deepcopy
 from ..db import db
@@ -69,9 +68,10 @@ def get_spaces_options(user_id):
         shared_logger.error({"err": f"Member not found:{user['id']}", "ECODE": "AUTH_002"})
         return jsonify(),404
  
-    spaces = user.clickup_workspace["spaces"]
+    spaces = user.clickup_spaces
 
     sp_options = []
+
     for sp in spaces:
         sp_options.append({
             "text": {
@@ -84,7 +84,7 @@ def get_spaces_options(user_id):
     return sp_options
 
 def open_configuration_initial_modal(trigger_id,sp_options):
-    roles =  ['Android','Web','Backend','iOS','PM','EM']
+    roles =  ['Product Manager','Engineering Manager','Android Engineer','Web Engineer','Backend Engineer','iOS Engineer']
 
     select_user_content=[]
     for role in roles:
@@ -92,17 +92,16 @@ def open_configuration_initial_modal(trigger_id,sp_options):
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"Select your {role} teammate"
+                "text": f"{role}"
             },
             "accessory": {
-               "type": "users_select",
+               "type": "multi_users_select",
 				"placeholder":{
 					"type": "plain_text",
-					"text": "Select a user",
+					"text": "Select users",
 				},
             }
         })
-
 
     blocks = [
         {
@@ -124,8 +123,17 @@ def open_configuration_initial_modal(trigger_id,sp_options):
 			"type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "Select target spaces"
+				"text": "Select your teammates."
 			},
+		},
+        {
+			"type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "Wingman will refer to the setting here to auto assign tickets"
+                }
+            ],
 		}
     ]
 
@@ -150,7 +158,7 @@ def open_configuration_initial_modal(trigger_id,sp_options):
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
 
-def send_configure_workspace_initial_msg(channel_id,user_id,ts=None):
+def send_configure_space_and_teammate_msg(channel_id,user_id,ts=None):
     if not User.get_member(user_id):
         shared_logger.error({"err": f"Member not found:{user_id}", "ECODE": "AUTH_002"})
         return jsonify(),404

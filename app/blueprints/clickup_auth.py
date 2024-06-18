@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify,request, session
 from ..models import User
 from ..db import db
 from ..oauth import oauth
-from ..handlers.slack import send_configure_workspace_initial_msg
+from ..handlers.slack import send_configure_space_and_teammate_msg
 from ..handlers.clickup import get_authorized_user,get_workspaces,get_spaces
 from ..config import Config
 from ..logger import logger
@@ -50,10 +50,11 @@ def authorize():
 
                 team = clickup_workspaces['teams'][0]
                 spaces = get_spaces(team['id'],access_token)
-                user.clickup_workspace = {"id":team['id'],"name":team['name'],'spaces':spaces["spaces"]}
+                user.clickup_team = {"id":team['id'],"name":team['name']}
+                user.clickup_spaces=spaces["spaces"]
 
                 db.session.commit()
-                send_configure_workspace_initial_msg(channel_id,user_id,ts)
+                send_configure_space_and_teammate_msg(channel_id,user_id,ts)
                 return jsonify({'msg':'You can close the screen and get back to Slack'})
     except Exception as e:
         logger.error(e)

@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
-from ..handlers.slack import send_onboarding_msg,handle_interactivities,send_connect_to_clickup_msg,send_configure_workspace_initial_msg
+from ..handlers.slack import send_onboarding_msg,handle_interactivities,send_connect_to_clickup_msg,send_configure_space_and_teammate_msg
 from slack_sdk.errors import SlackApiError
 from ..extensions import slack_bot_client
 from ..models.user import User
-
+from ..models.teammates import Teammates
 import json
 
 slack_bp = Blueprint('slack', __name__)
@@ -29,14 +29,15 @@ def slack_events():
         user_id = event['user']
 
         member = User.get_member(user_id)
+        teammates = Teammates.get_teammates(user_id)
 
         if not member:
             send_onboarding_msg(user_id)
         else:
-            if not member.clickup_token:
+            if not member.clickup_token or not member.clickup_spaces:
                 send_connect_to_clickup_msg(channel_id=user_id,user_id=user_id)
-            elif not member.clickup_workspaces or not member.clickup_folders :
-                send_configure_workspace_initial_msg(channel_id=user_id,user_id=user_id)
-    
+            elif not teammates:
+                send_configure_space_and_teammate_msg(channel_id=user_id,user_id=user_id)
+
     
     return jsonify({})

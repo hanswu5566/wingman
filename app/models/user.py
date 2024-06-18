@@ -1,5 +1,5 @@
 from ..db import db
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSON,JSONB
 
 class User(db.Model):
     __tablename__ = 'user'
@@ -12,7 +12,8 @@ class User(db.Model):
     clickup_user_id = db.Column(db.String(80), unique=True, nullable=True)
     clickup_user_name = db.Column(db.String(120), nullable=True)
 
-    clickup_workspace = db.Column(JSON, nullable=True)
+    clickup_team = db.Column(JSON, nullable=True)
+    clickup_spaces = db.Column(JSONB,nullable=True)
 
     @classmethod
     def get_member(cls,slack_user_id):
