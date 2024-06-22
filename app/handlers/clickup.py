@@ -14,7 +14,7 @@ def get_authorized_user(access_token):
         shared_logger.error(e)
 
 
-def get_workspaces(access_token):
+def get_teams(access_token):
     url = "https://api.clickup.com/api/v2/team"
 
     headers = {"Authorization": access_token}
@@ -22,21 +22,33 @@ def get_workspaces(access_token):
     try:
         response = requests.get(url, headers=headers)
         data = response.json()
-        return data
+        return data['teams']
     except Exception as e:
         shared_logger.error(e)
 
 
-def get_spaces(workspace_id,access_token):
-    url = "https://api.clickup.com/api/v2/team/" + workspace_id + "/space"
+def get_spaces(team_id,access_token):
+    url = "https://api.clickup.com/api/v2/team/" + team_id + "/space"
 
     headers = {"Authorization": access_token}
 
     try:
         response = requests.get(url, headers=headers)
         data = response.json()
-        return data
+        return data['spaces']
     except Exception as e:
         shared_logger.error(e)
 
+
+def get_members(team_id,access_token):
+    url = "https://api.clickup.com/api/v2/team/" + team_id
+
+    headers = {"Authorization": access_token}
+
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        return data['team']['members']
+    except Exception as e:
+        shared_logger.error(e)
 

@@ -1,11 +1,12 @@
-from flask import jsonify
+from ..db import db
 from ..extensions import slack_bot_client
-from slack_sdk.errors import SlackApiError
 from ..models.user import User
 from ..config import Config
 from logger import shared_logger
 from copy import deepcopy
-from ..db import db
+from slack_sdk.errors import SlackApiError
+from flask import jsonify
+from .clickup import get_spaces,get_members
 
 class UserAction:
     SIGN_UP = 'sign_up'
@@ -37,9 +38,11 @@ def handle_challenge(data):
     if "challenge" in data:
         # Respond with the challenge value to verify this endpoint
         return jsonify({"challenge": data["challenge"]})
-    
 
-def handle_interactivities(payload):
+def handle_submission(payload):
+    return jsonify({})
+
+def handle_actions(payload):
     action_id = payload['actions'][0]['action_id']
     trigger_id = payload['trigger_id']
     user = payload['user']
@@ -56,19 +59,20 @@ def handle_interactivities(payload):
             db.session.commit()
             send_connect_to_clickup_msg(channel_id=payload['channel']['id'],user_id=user['id'],ts=payload['message']['ts'])
     elif action_id == UserAction.OPEN_SETUP_MODAL:
-        sp_options = get_spaces_options(user['id'])
-        open_configuration_initial_modal(trigger_id,sp_options)
+        sp_options = get_setup_clickup_options(user['id'])
+        open_wingman_setup_modal(trigger_id,sp_options)
 
     return jsonify({})
 
 
-def get_spaces_options(user_id):
+def get_setup_clickup_options(user_id)->tuple[list,list]:
     user = User.get_member(user_id)
     if not user:
         shared_logger.error({"err": f"Member not found:{user['id']}", "ECODE": "AUTH_002"})
         return jsonify(),404
  
-    spaces = user.clickup_spaces
+    spaces = get_spaces(user.clickup_team_id,user.clickup_token)
+    members = get_members(user.clickup_team_id,user.clickup_token)
 
     sp_options = []
 
@@ -80,61 +84,59 @@ def get_spaces_options(user_id):
             },
             "value": sp["id"]
         })
-    
+
+
     return sp_options
 
-def open_configuration_initial_modal(trigger_id,sp_options):
-    roles =  ['Product Manager','Engineering Manager','Android Engineer','Web Engineer','Backend Engineer','iOS Engineer']
+def open_wingman_setup_modal(trigger_id,sp_options):
+    roles =  ['PM','EM','Android','Web','Backend','iOS']
 
     select_user_content=[]
     for role in roles:
-        select_user_content.append({
+        select_user_content.extend([
+        {
             "type": "section",
             "text": {
-                "type": "mrkdwn",
-                "text": f"{role}"
+                "type": "plain_text",
+                "text": f"Select {role} slack teammates"
             },
-            "accessory": {
-               "type": "multi_users_select",
-				"placeholder":{
-					"type": "plain_text",
-					"text": "Select users",
-				},
-            }
-        })
+            "accessory":{
+                "type": "multi_users_select",
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select a user"
+                },
+            },
+        }])
 
     blocks = [
         {
+			"type": "context",
+			"elements": [
+				{
+					"type": "plain_text",
+					"text": "Wingman will generate tickets and assign team members based on the ticket content and your configured settings.",
+					"emoji": True
+				}
+			]
+		},
+        {
             "type": "section",
 			"text": {
 				"type": "mrkdwn",
-				"text": "Select target spaces"
+				"text": "Select target clickup spaces"
 			},
+            "block_id": "select_clickup_spaces",
             "accessory":{
                 "type": "multi_static_select",
                 "action_id": UserAction.SELECT_SPACES,
-                "options": sp_options
+                "options": sp_options,
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select clickup spaces where tickets will reside."
+                },
             },
         },
-        {
-			"type": "divider"
-		},
-        {
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "Select your teammates."
-			},
-		},
-        {
-			"type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": "Wingman will refer to the setting here to auto assign tickets"
-                }
-            ],
-		}
     ]
 
     blocks.extend(select_user_content)
@@ -142,9 +144,10 @@ def open_configuration_initial_modal(trigger_id,sp_options):
 
     view = {
         "type": "modal",
+        "callback_id": "setup-wingman-modal",
         "title": {
             "type": "plain_text",
-            "text": "Setup Clickup"
+            "text": "Setup Wingman Service"
         },
         "blocks": blocks,
         "submit": {
@@ -171,13 +174,12 @@ def send_configure_space_and_teammate_msg(channel_id,user_id,ts=None):
     
     msg = deepcopy(ONBOARDING_MSG) if ts else {"blocks":[]}
 
-
     blocks = [
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "Almost done. This is the last step."
+                "text": "Almost done. You have my word. This is the last step."
             }
         },
         {

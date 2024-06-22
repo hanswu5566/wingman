@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from ..handlers.slack import send_onboarding_msg,handle_interactivities,send_connect_to_clickup_msg,send_configure_space_and_teammate_msg
+from ..handlers.slack import send_onboarding_msg,handle_actions,handle_submission,send_connect_to_clickup_msg,send_configure_space_and_teammate_msg
 from slack_sdk.errors import SlackApiError
 from ..extensions import slack_bot_client
 from ..models.user import User
@@ -13,7 +13,10 @@ slack_bp = Blueprint('slack', __name__)
 def slack_interacts():
     payload = json.loads(request.form['payload'])
 
-    handle_interactivities(payload)
+    if payload['type']=='block_actions':
+        handle_actions(payload)
+    elif payload['type']=='view_submission':
+        handle_submission(payload)
         
     return jsonify({})
 
@@ -34,7 +37,7 @@ def slack_events():
         if not member:
             send_onboarding_msg(user_id)
         else:
-            if not member.clickup_token or not member.clickup_spaces:
+            if not member.clickup_token:
                 send_connect_to_clickup_msg(channel_id=user_id,user_id=user_id)
             elif not teammates:
                 send_configure_space_and_teammate_msg(channel_id=user_id,user_id=user_id)
