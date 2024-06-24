@@ -1,9 +1,9 @@
 from flask import Blueprint, request, jsonify
-from ..handlers.slack import send_onboarding_msg,handle_actions,handle_submission,send_connect_to_clickup_msg,send_configure_space_and_teammate_msg
+from ..handlers.slack import send_onboarding_msg,handle_actions,handle_teammates_submission,send_connect_to_clickup_msg,send_configure_space_and_teammate_msg
 from slack_sdk.errors import SlackApiError
 from ..extensions import slack_bot_client
 from ..models.user import User
-from ..models.teammates import Teammates
+from ..models.targets import Targets
 import json
 
 slack_bp = Blueprint('slack', __name__)
@@ -16,7 +16,7 @@ def slack_interacts():
     if payload['type']=='block_actions':
         handle_actions(payload)
     elif payload['type']=='view_submission':
-        handle_submission(payload)
+        handle_teammates_submission(payload)
         
     return jsonify({})
 
@@ -32,7 +32,7 @@ def slack_events():
         user_id = event['user']
 
         member = User.get_member(user_id)
-        teammates = Teammates.get_teammates(user_id)
+        teammates = Targets.get_teammates(user_id)
 
         if not member:
             send_onboarding_msg(user_id)

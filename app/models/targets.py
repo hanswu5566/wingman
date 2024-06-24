@@ -1,11 +1,12 @@
 from ..db import db
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSON,ARRAY
 
-class Teammates(db.Model):
+class Targets(db.Model):
     __tablename__ = 'teammates'
     id = db.Column(db.Integer, primary_key=True)
     slack_user_id = db.Column(db.String(80), unique=True, nullable=False)
     
+    spaces = db.Column(ARRAY(db.string(80)),nullable=False)
     ios_teammates = db.Column(JSON, nullable=True)
     web_teammates = db.Column(JSON, nullable=True)
     android_teammates = db.Column(JSON, nullable=True)

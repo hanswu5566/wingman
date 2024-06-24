@@ -12,8 +12,9 @@ class UserAction:
     SIGN_UP = 'sign_up'
     OPEN_SETUP_MODAL = 'open_setup_modal'
     CONNECT_TO_CLICKUP = 'connect_to_clickup'
-    SELECT_WORKSPACE = 'select_workspace'
-    SELECT_SPACES = 'select_space'
+    SELECT_CLICKUP_SPACES = 'select_clickup_space'
+
+roles =  ['Product Manager','Engineering Manager','Web','Backend','iOS','Android']
 
 ONBOARDING_MSG = {
 	"blocks": [
@@ -39,7 +40,27 @@ def handle_challenge(data):
         # Respond with the challenge value to verify this endpoint
         return jsonify({"challenge": data["challenge"]})
 
-def handle_submission(payload):
+def handle_teammates_submission(payload):
+    state_values = payload['view']['state']['values']
+    # Extract the selected ClickUp spaces
+    clickup_spaces = state_values.get(UserAction.SELECT_CLICKUP_SPACES, {}).get(UserAction.SELECT_CLICKUP_SPACES, {}).get('selected_options', [])
+    clickup_spaces_ids = [option['value'] for option in clickup_spaces]
+
+    # Define roles based on your roles list
+    teammates = {}
+
+    for role in roles:
+        role_key = f'select_{role.lower()}'
+        if role_key in state_values:
+            for key in state_values[role_key]:
+                selected_users = state_values[role_key][key].get('selected_users', [])
+                teammates[role.lower()] = [user for user in selected_users]
+
+    # Example: Printing the extracted values
+    print("ClickUp Spaces:", clickup_spaces_ids)
+    for role, user_ids in teammates.items():
+        print(f"{role} Teammates:", user_ids)
+
     return jsonify({})
 
 def handle_actions(payload):
@@ -89,8 +110,6 @@ def get_setup_clickup_options(user_id)->tuple[list,list]:
     return sp_options
 
 def open_wingman_setup_modal(trigger_id,sp_options):
-    roles =  ['PM','EM','Android','Web','Backend','iOS']
-
     select_user_content=[]
     for role in roles:
         select_user_content.extend([
@@ -98,13 +117,14 @@ def open_wingman_setup_modal(trigger_id,sp_options):
             "type": "section",
             "text": {
                 "type": "plain_text",
-                "text": f"Select {role} slack teammates"
+                "text": f"{role}"
             },
+            'block_id':f'select_{role.lower()}',
             "accessory":{
                 "type": "multi_users_select",
                 "placeholder": {
                     "type": "plain_text",
-                    "text": "Select a user"
+                    "text": "Select the teammates to whom tickets will be assigned"
                 },
             },
         }])
@@ -121,21 +141,31 @@ def open_wingman_setup_modal(trigger_id,sp_options):
 			]
 		},
         {
+            "type": "divider"
+        },
+        {
             "type": "section",
 			"text": {
 				"type": "mrkdwn",
 				"text": "Select target clickup spaces"
 			},
-            "block_id": "select_clickup_spaces",
+            "block_id": UserAction.SELECT_CLICKUP_SPACES,
             "accessory":{
                 "type": "multi_static_select",
-                "action_id": UserAction.SELECT_SPACES,
+                "action_id": UserAction.SELECT_CLICKUP_SPACES,
                 "options": sp_options,
                 "placeholder": {
                     "type": "plain_text",
                     "text": "Select clickup spaces where tickets will reside."
                 },
             },
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "plain_text",
+                "text": "Select Slack teammates"
+            }
         },
     ]
 

@@ -1,7 +1,7 @@
 from .user import User
-from .teammates import Teammates
+from .targets import Targets
 
 __all__ = [
     "User",
-    "Teammates"
+    "Targets"
 ]
