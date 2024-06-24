@@ -32,7 +32,7 @@ def slack_events():
         user_id = event['user']
 
         member = User.get_member(user_id)
-        teammates = Targets.get_teammates(user_id)
+        teammates = Targets.get_targets(user_id)
 
         if not member:
             send_onboarding_msg(user_id)

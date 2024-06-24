@@ -14,7 +14,7 @@ class UserAction:
     CONNECT_TO_CLICKUP = 'connect_to_clickup'
     SELECT_CLICKUP_SPACES = 'select_clickup_space'
 
-roles =  ['Product Manager','Engineering Manager','Web','Backend','iOS','Android']
+roles =  ['Product Manager','Engineering Manager','Product Designer','Web','Backend','iOS','Android']
 
 ONBOARDING_MSG = {
 	"blocks": [
@@ -55,6 +55,9 @@ def handle_teammates_submission(payload):
             for key in state_values[role_key]:
                 selected_users = state_values[role_key][key].get('selected_users', [])
                 teammates[role.lower()] = [user for user in selected_users]
+
+    
+    
 
     # Example: Printing the extracted values
     print("ClickUp Spaces:", clickup_spaces_ids)
