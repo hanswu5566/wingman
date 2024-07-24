@@ -1,20 +1,32 @@
+import requests
+import json
 from ..db import db
 from ..extensions import slack_bot_client
 from ..models.user import User
 from ..models.targets import Targets
+from ..models.contexts import Contexts
+
 from ..config import Config
 from logger import shared_logger
 from copy import deepcopy
 from slack_sdk.errors import SlackApiError
 from flask import jsonify
-from .clickup import get_spaces
+from .clickup import (
+    get_spaces,
+    get_list,
+    get_space,
+    get_members,
+    get_folders,
+    create_clickup_ticket,
+)
 
 
 class UserAction:
     SIGN_UP = "sign_up"
     OPEN_SETUP_MODAL = "open_setup_modal"
     CONNECT_TO_CLICKUP = "connect_to_clickup"
-    SELECT_CLICKUP_SPACES = "select_clickup_space"
+    SELECT_CLICKUP_LISTS = "select_clickup_lists"
+    SELECT_TARGET_CLICKUP_LIST = "select_target_clickup_list"
 
 
 class CallBacks:
@@ -54,44 +66,20 @@ def handle_challenge(data):
         return jsonify({"challenge": data["challenge"]})
 
 
-def send_hint_message(user_id):
-    msg = {}
-    msg["blocks"] = [
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": " Mention me in a message with a brief description of your issue or ticket. Here’s how:\n"
-                + "1.Mention the bot @wingman.\n"
-                + "2.Describe your issue: Provide a short summary of the issue or ticket you need to create.\n"
-                + "For example: @wingman I need to create a ticket for the login bug on the main page.",
-            },
-        },
-    ]
-
-    try:
-        slack_bot_client.chat_postMessage(
-            channel=user_id, blocks=msg["blocks"], text="Congrats !"
-        )
-
-    except SlackApiError as e:
-        shared_logger.error(f"Error sending message: {e.response['error']}")
-
-
-def handle_add_teammates_submission(payload):
+def handle_setup_wingman_submission(payload):
     state_values = payload["view"]["state"]["values"]
     # Extract the selected ClickUp spaces
-    clickup_spaces = (
-        state_values.get(UserAction.SELECT_CLICKUP_SPACES, {})
-        .get(UserAction.SELECT_CLICKUP_SPACES, {})
+    clikcup_lists = (
+        state_values.get(UserAction.SELECT_CLICKUP_LISTS, {})
+        .get(UserAction.SELECT_CLICKUP_LISTS, {})
         .get("selected_options", [])
     )
-    clickup_spaces_ids = [option["value"] for option in clickup_spaces]
-    if len(clickup_spaces_ids) == 0:
+    clickup_list_ids = [option["value"] for option in clikcup_lists]
+    if len(clickup_list_ids) == 0:
         return {
             "response_action": "errors",
             "errors": {
-                UserAction.SELECT_CLICKUP_SPACES: "Need to set at least one clickup space"
+                UserAction.SELECT_CLICKUP_LISTS: "Need to set at least one clickup list"
             },
         }
 
@@ -103,38 +91,50 @@ def handle_add_teammates_submission(payload):
         if role_key in state_values:
             for key in state_values[role_key]:
                 selected_users = state_values[role_key][key].get("selected_users", [])
-                teammates[role.lower()] = [user for user in selected_users]
+                for user in selected_users:
+                    info = slack_bot_client.users_info(user=user)
+                    if (
+                        info.data["ok"]
+                        and not info.data["user"]["is_bot"]
+                        and info.data["user"]["id"] != "USLACKBOT"
+                    ):
+                        if role.lower() not in teammates:
+                            teammates[role.lower()] = []
+                        teammates[role.lower()].append(
+                            {"id": user, "email": info.data["user"]["profile"]["email"]}
+                        )
 
     target = Targets.get_targets(slack_user_id=payload["user"]["id"])
+
     if not target:
         new_target = Targets(
             slack_user_id=payload["user"]["id"],
-            clickup_spaces=clickup_spaces_ids,
+            clickup_lists=clickup_list_ids,
             ios_teammates=teammates.get("ios", []),
             web_teammates=teammates.get("web", []),
             android_teammates=teammates.get("android", []),
             backend_teammates=teammates.get("backend", []),
-            product_manager_teammates=teammates.get("productmanager"),
-            engineering_manager_teammates=teammates.get("engineeringmanager", []),
-            product_designer_teammates=teammates.get("productdesigner", []),
+            product_manager_teammates=teammates.get("product manager", []),
+            engineering_manager_teammates=teammates.get("engineering manager", []),
+            product_designer_teammates=teammates.get("product designer", []),
         )
 
         db.session.add(new_target)
     else:
         target.slack_user_id = payload["user"]["id"]
-        target.clickup_spaces = clickup_spaces_ids
+        target.clickup_lists = clickup_list_ids
         target.ios_teammates = teammates.get("ios", target.ios_teammates)
         target.web_teammates = teammates.get("web", target.web_teammates)
         target.android_teammates = teammates.get("android", target.android_teammates)
         target.backend_teammates = teammates.get("backend", target.backend_teammates)
         target.product_manager_teammates = teammates.get(
-            "productmanager", target.product_manager_teammates
+            "product manager", target.product_manager_teammates
         )
         target.engineering_manager_teammates = teammates.get(
-            "engineeringmanager", target.engineering_manager_teammates
+            "engineering manager", target.engineering_manager_teammates
         )
         target.product_designer_teammates = teammates.get(
-            "productdesigner", target.product_designer_teammates
+            "product designer", target.product_designer_teammates
         )
 
     db.session.commit()
@@ -163,13 +163,63 @@ def handle_actions(payload):
                 ts=payload["message"]["ts"],
             )
     elif action_id == UserAction.OPEN_SETUP_MODAL:
-        sp_options = get_setup_clickup_space_options(user["id"])
-        open_wingman_setup_modal(trigger_id, sp_options)
+        list_options = get_setup_clickup_list_options(user["id"])
+        open_wingman_setup_modal(trigger_id, list_options)
+
+    elif action_id == UserAction.SELECT_TARGET_CLICKUP_LIST:
+        selected_options = []
+
+        if "state" in payload and "values" in payload["state"]:
+            for _, block in payload["state"]["values"].items():
+                for action_id, action in block.items():
+                    selected_option = action.get("selected_option")
+                    if selected_option:
+                        selected_options.append(selected_option["value"])
+
+        if len(selected_options) > 0:
+            channel_id = payload["channel"]["id"]
+            ts = payload["message"]["ts"]
+
+            slack_bot_client.chat_update(
+                channel=channel_id, ts=ts, text="Got it, please wait...."
+            )
+
+            slack_user_id = payload["user"]["id"]
+            ctx = Contexts.get_contexts(slack_user_id=slack_user_id)
+            answer = ctx.last_clickup_dify_answer
+
+            if "action" not in answer:
+                slack_bot_client.chat_postMessage(
+                    channel=slack_user_id, text=answer["msg"]
+                )
+            else:
+                action = answer["action"]
+                targets = Targets.get_targets(slack_user_id=slack_user_id)
+
+                user = User.get_member(slack_user_id=slack_user_id)
+                members = get_members(user.clickup_team_id, user.clickup_token)
+
+                # Trigger clickup ticket creation
+                if action == "create_ticket":
+                    res = create_clickup_ticket(
+                        user.clickup_token,
+                        answer,
+                        targets,
+                        selected_options[0],
+                        members,
+                    )
+                if res:
+                    url = res["url"]
+                    (
+                        slack_bot_client.chat_postMessage(
+                            channel=slack_user_id, text=f"{answer['msg']}: {url}"
+                        )
+                    )
 
     return jsonify({})
 
 
-def get_setup_clickup_space_options(user_id) -> tuple[list, list]:
+def get_setup_clickup_list_options(user_id) -> tuple[list, list]:
     user = User.get_member(user_id)
     if not user:
         shared_logger.error(
@@ -179,17 +229,24 @@ def get_setup_clickup_space_options(user_id) -> tuple[list, list]:
 
     spaces = get_spaces(user.clickup_team_id, user.clickup_token)
 
-    sp_options = []
+    list_options = []
 
     for sp in spaces:
-        sp_options.append(
-            {"text": {"type": "plain_text", "text": sp["name"]}, "value": sp["id"]}
-        )
+        folders = get_folders(space_id=sp['id'], access_token=user.clickup_token)
+        for folder in folders:
+            lists = folder["lists"]
+            for list in lists:
+                list_options.append(
+                    {
+                        "text": {"type": "plain_text", "text": f'{folder['name']} : {list["name"]}'},
+                        "value": list["id"],
+                    }
+                )
 
-    return sp_options
+    return list_options
 
 
-def open_wingman_setup_modal(trigger_id, sp_options):
+def open_wingman_setup_modal(trigger_id, list_options):
     select_user_content = []
     for role in roles:
         select_user_content.extend(
@@ -223,18 +280,18 @@ def open_wingman_setup_modal(trigger_id, sp_options):
         {"type": "divider"},
         {
             "type": "input",
-            "block_id": UserAction.SELECT_CLICKUP_SPACES,
+            "block_id": UserAction.SELECT_CLICKUP_LISTS,
             "label": {
                 "type": "plain_text",
-                "text": "Select target ClickUp spaces",
+                "text": "Select target ClickUp lists",
             },
             "element": {
                 "type": "multi_static_select",
-                "action_id": UserAction.SELECT_CLICKUP_SPACES,
-                "options": sp_options,
+                "action_id": UserAction.SELECT_CLICKUP_LISTS,
+                "options": list_options,
                 "placeholder": {
                     "type": "plain_text",
-                    "text": "Must choose at least one.",
+                    "text": "Must choose at least one list.",
                 },
             },
         },
@@ -261,6 +318,7 @@ def open_wingman_setup_modal(trigger_id, sp_options):
         slack_bot_client.views_open(trigger_id=trigger_id, view=view)
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
+        raise e
 
 
 def send_configure_space_and_teammate_msg(channel_id, user_id, ts=None):
@@ -311,6 +369,7 @@ def send_configure_space_and_teammate_msg(channel_id, user_id, ts=None):
             )
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
+        raise e
 
 
 def send_connect_to_clickup_msg(channel_id, user_id, ts=None):
@@ -392,3 +451,86 @@ def send_onboarding_msg(channel_id: str):
         )
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
+        raise e
+
+
+def send_select_list_msg(request_msg, slack_user_id):
+    targets = Targets.get_targets(slack_user_id=slack_user_id)
+
+    if not targets:
+        msg = f"User {slack_user_id} failed to find targets"
+        shared_logger.error(msg)
+        return jsonify({"error": msg})
+
+    if len(targets.clickup_lists) == 0:
+        msg = f"User {slack_user_id}, clickup lists length is zero"
+        shared_logger.error(msg)
+        return jsonify({"error": msg})
+
+    user = User.get_member(slack_user_id=slack_user_id)
+    if not user:
+        msg = f"User {slack_user_id} not exist"
+        shared_logger.error(msg)
+        return jsonify({"error": msg})
+
+    options = []
+    for list_id in targets.clickup_lists:
+        list_info = get_list(list_id=list_id, access_token=user.clickup_token)
+        name =  f'{list_info['space']['name']}-{list_info['folder']['name']}-{list_info['name']}'
+        options.append(
+            {
+                "text": {"type": "plain_text", "text":name},
+                "value": list_id,
+            }
+        )
+
+    msg = {}
+    msg["blocks"] = [
+        {
+            "type": "input",
+            "block_id": UserAction.SELECT_TARGET_CLICKUP_LIST,
+            "label": {
+                "type": "plain_text",
+                "text": f"Request received: {request_msg}\n Select a folder to create a ticket",
+            },
+            "element": {
+                "type": "static_select",
+                "action_id": UserAction.SELECT_TARGET_CLICKUP_LIST,
+                "placeholder": {
+                    "type": "plain_text",
+                    "text": "Select an list to create ticket",
+                },
+                "options": options,
+            },
+        }
+    ]
+
+    try:
+        slack_bot_client.chat_postMessage(
+            channel=slack_user_id, blocks=msg["blocks"], text="select_target_space"
+        )
+    except SlackApiError as e:
+        shared_logger.error(f"Error sending message: {e.response['error']}")
+        raise e
+
+
+def send_clickup_content(answer, slack_user_id, target_space):
+    # Respond typical error message
+    if "action" not in answer:
+        slack_bot_client.chat_postMessage(channel=slack_user_id, text=answer["msg"])
+        return
+
+    action = answer["action"]
+
+    targets = Targets.get_targets(slack_user_id=slack_user_id)
+
+    # Trigger clickup ticket creation
+    if action == "create_ticket":
+        res = create_clickup_ticket(answer, target_space)
+    if res:
+        url = res["url"]
+        (
+            slack_bot_client.chat_postMessage(
+                channel=slack_user_id, text=f"{answer['msg']}: {url}"
+            )
+        )

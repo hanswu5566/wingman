@@ -1,11 +1,12 @@
 from ..db import db
 from sqlalchemy import DateTime, func
+from sqlalchemy.dialects.postgresql import JSON
 
 
 class User(db.Model):
     __tablename__ = "user"
     id = db.Column(db.Integer, primary_key=True)
-    slack_user_id = db.Column(db.String(80), unique=True, nullable=False)
+    slack_user_id = db.Column(db.String(80), unique=True, nullable=False, index=True)
     slack_team_id = db.Column(db.String(80), unique=True, nullable=False)
     slack_user_name = db.Column(db.String(120), nullable=False)
 

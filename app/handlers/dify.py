@@ -1,19 +1,20 @@
+from ..db import db
 from ..config import Config
 from ..secret import Secret
 from logger import shared_logger
 import requests
 import json
 
-from .clickup import create_clickup_ticket
 from ..extensions import celery_instance
-from ..extensions import slack_bot_client
+
+from ..models.contexts import Contexts
+from ..handlers.slack import send_select_list_msg
+
 from logger import shared_logger
 
 
-@celery_instance.task
-def handle_slack_event(payload):
+def handle_clickup_request(payload):
     text = payload["event"]["text"]
-    channel = payload["event"]["channel"]
     tag_pattern = f"<@{Config.BOT_SLACK_ID}>"
     cleaned_msg = text.replace(tag_pattern, "").strip()
 
@@ -33,32 +34,27 @@ def handle_slack_event(payload):
             },
         )
 
+        print(response)
+
         if response.ok:
             dify_msg = response.json()
             answer = json.loads(
                 (dify_msg["answer"].replace("```json\n", "").replace("\n```", ""))
             )
-            process_dify(answer, channel)
-    except requests.exceptions.RequestException as e:
+
+            contexts = Contexts.get_contexts(slack_user_id=payload["event"]["user"])
+            if not contexts:
+                ctx = Contexts(
+                    slack_user_id=payload["event"]["user"],
+                    last_clickup_dify_answer=answer,
+                )
+                db.session.add(ctx)
+            else:
+                contexts.last_clickup_dify_answer = answer
+            db.session.commit()
+            send_select_list_msg(
+                request_msg=cleaned_msg, slack_user_id=payload["event"]["user"]
+            )
+    except Exception as e:
         shared_logger.error(f"Error: {e}")
         raise e
-
-
-def process_dify(answer, channel):
-    # Respond typical error message
-    if "action" not in answer:
-        slack_bot_client.chat_postMessage(channel=channel, text=answer["msg"])
-        return
-
-    action = answer["action"]
-
-    # Trigger clickup ticket creation
-    if action == "create_ticket":
-        res = create_clickup_ticket(answer)
-        if res:
-            url = res["url"]
-            (
-                slack_bot_client.chat_postMessage(
-                    channel=channel, text=f"{answer['msg']}: {url}"
-                )
-            )

@@ -7,8 +7,8 @@ class Targets(db.Model):
     __tablename__ = "targets"
     id = db.Column(db.Integer, primary_key=True)
 
-    slack_user_id = db.Column(db.String(80), unique=True, nullable=False)
-    clickup_spaces = db.Column(ARRAY(db.String(80)), nullable=False)
+    slack_user_id = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    clickup_lists = db.Column(ARRAY(db.String(80)), nullable=False)
 
     ios_teammates = db.Column(JSON, nullable=True)
     web_teammates = db.Column(JSON, nullable=True)
