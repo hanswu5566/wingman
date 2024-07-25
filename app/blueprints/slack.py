@@ -7,7 +7,10 @@ from ..handlers.slack import (
     send_configure_space_and_teammate_msg,
     CallBacks,
 )
-from ..handlers.dify import handle_clickup_request
+
+from ..tasks import handle_clickup_request
+from ..extensions import slack_bot_client, celery_instance
+from flask import current_app as app
 from ..models.user import User
 from ..models.targets import Targets
 from logger import shared_logger
@@ -59,7 +62,12 @@ def slack_events():
                         channel_id=slack_user_id, user_id=slack_user_id
                     )
                 else:
-                    handle_clickup_request(payload)
+                    channel_id = payload["event"]["user"]
+                    slack_bot_client.chat_postMessage(
+                        channel=channel_id, text="Got it, please wait...."
+                    )
+                    with app.app_context():
+                        handle_clickup_request.delay(payload)
 
     except Exception as e:
         shared_logger.error(e)

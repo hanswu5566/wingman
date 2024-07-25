@@ -1,5 +1,3 @@
-import requests
-import json
 from ..db import db
 from ..extensions import slack_bot_client
 from ..models.user import User
@@ -180,9 +178,9 @@ def handle_actions(payload):
             channel_id = payload["channel"]["id"]
             ts = payload["message"]["ts"]
 
-            slack_bot_client.chat_update(
-                channel=channel_id, ts=ts, text="Got it, please wait...."
-            )
+            # slack_bot_client.chat_update(
+            #     channel=channel_id, ts=ts, text="Got it, please wait...."
+            # )
 
             slack_user_id = payload["user"]["id"]
             ctx = Contexts.get_contexts(slack_user_id=slack_user_id)
@@ -521,8 +519,6 @@ def send_clickup_content(answer, slack_user_id, target_space):
         return
 
     action = answer["action"]
-
-    targets = Targets.get_targets(slack_user_id=slack_user_id)
 
     # Trigger clickup ticket creation
     if action == "create_ticket":
