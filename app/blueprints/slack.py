@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from ..handlers.slack import (
     send_onboarding_msg,
     handle_actions,
@@ -8,13 +8,15 @@ from ..handlers.slack import (
     CallBacks,
 )
 
-from ..tasks import handle_clickup_request
-from ..extensions import slack_bot_client, celery_instance
+
+from ..extensions import slack_bot_client
+from ..handlers.dify import handle_clickup_request
 from flask import current_app as app
 from ..models.user import User
 from ..models.targets import Targets
 from logger import shared_logger
 import json
+import re
 
 
 slack_bp = Blueprint("slack", __name__)
@@ -25,14 +27,12 @@ def slack_interacts():
     payload = json.loads(request.form["payload"])
 
     if payload["type"] == "block_actions":
-        handle_actions(payload)
+        return handle_actions(payload)
     elif payload["type"] == "view_submission":
         if payload["view"]["callback_id"] == CallBacks.SETUP_SERVICES:
-            errors = handle_setup_wingman_submission(payload)
-            if errors:
-                return jsonify(errors)
+            return handle_setup_wingman_submission(payload)
 
-    return jsonify({})
+    return jsonify()
 
 
 @slack_bp.route("/events", methods=["POST"])
@@ -62,9 +62,13 @@ def slack_events():
                         channel_id=slack_user_id, user_id=slack_user_id
                     )
                 else:
-                    channel_id = payload["event"]["user"]
+                    channel_id = payload["event"]["channel"]
+                    text = payload["event"]["text"]
+                    cleaned_msg = re.sub(r"<@[\w]+>", "", text)
+
                     slack_bot_client.chat_postMessage(
-                        channel=channel_id, text="Got it, please wait...."
+                        channel=channel_id,
+                        text=f"Requests accepted:{cleaned_msg}\nNow processing, please wait....",
                     )
                     with app.app_context():
                         handle_clickup_request.delay(payload)

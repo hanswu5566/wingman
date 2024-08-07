@@ -1,5 +1,5 @@
 from ..db import db
-from ..extensions import slack_bot_client
+from ..extensions import slack_bot_client,celery_instance
 from ..models.user import User
 from ..models.targets import Targets
 from ..models.contexts import Contexts
@@ -12,7 +12,6 @@ from flask import jsonify
 from .clickup import (
     get_spaces,
     get_list,
-    get_space,
     get_members,
     get_folders,
     create_clickup_ticket,
@@ -63,16 +62,28 @@ def handle_challenge(data):
         # Respond with the challenge value to verify this endpoint
         return jsonify({"challenge": data["challenge"]})
 
-
 def handle_setup_wingman_submission(payload):
+    try:
+        handle_update_teammates.delay(payload)
+        slack_bot_client.chat_postMessage(channel=payload['user']['id'],text='Update teammates successfully done. Try creating another ticket.')
+    except Exception as e:
+        shared_logger.error(f"Error setting up teammates: {e.response['error']}")
+        raise e
+
+    return jsonify({})
+
+
+@celery_instance.task
+def handle_update_teammates(payload):
+    teammates = {}
     state_values = payload["view"]["state"]["values"]
-    # Extract the selected ClickUp spaces
     clikcup_lists = (
         state_values.get(UserAction.SELECT_CLICKUP_LISTS, {})
         .get(UserAction.SELECT_CLICKUP_LISTS, {})
         .get("selected_options", [])
     )
     clickup_list_ids = [option["value"] for option in clikcup_lists]
+
     if len(clickup_list_ids) == 0:
         return {
             "response_action": "errors",
@@ -80,9 +91,6 @@ def handle_setup_wingman_submission(payload):
                 UserAction.SELECT_CLICKUP_LISTS: "Need to set at least one clickup list"
             },
         }
-
-    # Define roles based on your roles list
-    teammates = {}
 
     for role in roles:
         role_key = f"select_{role.lower()}"
@@ -137,8 +145,6 @@ def handle_setup_wingman_submission(payload):
 
     db.session.commit()
 
-    return None
-
 
 def handle_actions(payload):
     action_id = payload["actions"][0]["action_id"]
@@ -166,7 +172,6 @@ def handle_actions(payload):
 
     elif action_id == UserAction.SELECT_TARGET_CLICKUP_LIST:
         selected_options = []
-
         if "state" in payload and "values" in payload["state"]:
             for _, block in payload["state"]["values"].items():
                 for action_id, action in block.items():
@@ -175,28 +180,22 @@ def handle_actions(payload):
                         selected_options.append(selected_option["value"])
 
         if len(selected_options) > 0:
-            channel_id = payload["channel"]["id"]
-            ts = payload["message"]["ts"]
-
-            # slack_bot_client.chat_update(
-            #     channel=channel_id, ts=ts, text="Got it, please wait...."
-            # )
-
             slack_user_id = payload["user"]["id"]
+            channel_id = payload['channel']['id']
+            ts = payload['container']['message_ts']
+
             ctx = Contexts.get_contexts(slack_user_id=slack_user_id)
             answer = ctx.last_clickup_dify_answer
 
             if "action" not in answer:
                 slack_bot_client.chat_postMessage(
-                    channel=slack_user_id, text=answer["msg"]
+                    channel=channel_id,ts=ts, text=answer["msg"]
                 )
             else:
                 action = answer["action"]
                 targets = Targets.get_targets(slack_user_id=slack_user_id)
-
                 user = User.get_member(slack_user_id=slack_user_id)
                 members = get_members(user.clickup_team_id, user.clickup_token)
-
                 # Trigger clickup ticket creation
                 if action == "create_ticket":
                     res = create_clickup_ticket(
@@ -210,11 +209,17 @@ def handle_actions(payload):
                     url = res["url"]
                     (
                         slack_bot_client.chat_postMessage(
-                            channel=slack_user_id, text=f"{answer['msg']}: {url}"
+                            channel=channel_id,ts=ts,text=f"{answer['msg']}: {url}"
                         )
                     )
 
-    return jsonify({})
+    return jsonify(
+        {
+            "response_type": "ephemeral",
+            "replace_original": True,
+            "delete_original": True,
+        }
+    )
 
 
 def get_setup_clickup_list_options(user_id) -> tuple[list, list]:
@@ -452,7 +457,7 @@ def send_onboarding_msg(channel_id: str):
         raise e
 
 
-def send_select_list_msg(request_msg, slack_user_id):
+def send_select_list_msg(slack_user_id,channel_id):
     targets = Targets.get_targets(slack_user_id=slack_user_id)
 
     if not targets:
@@ -489,7 +494,7 @@ def send_select_list_msg(request_msg, slack_user_id):
             "block_id": UserAction.SELECT_TARGET_CLICKUP_LIST,
             "label": {
                 "type": "plain_text",
-                "text": f"Request received: {request_msg}\n Select a folder to create a ticket",
+                "text": f"Now please select the target list for the ticket",
             },
             "element": {
                 "type": "static_select",
@@ -504,29 +509,10 @@ def send_select_list_msg(request_msg, slack_user_id):
     ]
 
     try:
-        slack_bot_client.chat_postMessage(
-            channel=slack_user_id, blocks=msg["blocks"], text="select_target_space"
+        slack_bot_client.chat_postEphemeral(
+            channel=channel_id, user=slack_user_id, blocks=msg["blocks"], text="select_target_space"
         )
     except SlackApiError as e:
         shared_logger.error(f"Error sending message: {e.response['error']}")
         raise e
 
-
-def send_clickup_content(answer, slack_user_id, target_space):
-    # Respond typical error message
-    if "action" not in answer:
-        slack_bot_client.chat_postMessage(channel=slack_user_id, text=answer["msg"])
-        return
-
-    action = answer["action"]
-
-    # Trigger clickup ticket creation
-    if action == "create_ticket":
-        res = create_clickup_ticket(answer, target_space)
-    if res:
-        url = res["url"]
-        (
-            slack_bot_client.chat_postMessage(
-                channel=slack_user_id, text=f"{answer['msg']}: {url}"
-            )
-        )
